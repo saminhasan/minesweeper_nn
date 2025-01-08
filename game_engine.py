@@ -4,7 +4,6 @@ import string
 import numpy as np
 from solver import Rule, MineCount, solve
 from enum import Enum
-import time
 
 # from scipy.signal import convolve2d
 
@@ -13,7 +12,7 @@ from typing import Any, Set, Dict, List, Tuple
 
 # Type-hinted dictionary for game modes
 game_mode: Dict[str, Dict[str, int]] = {
-    "test": {"rows": 5, "columns": 5, "mines": 2},
+    "test": {"rows": 5, "columns": 5, "mines": 5},
     "easy": {"rows": 10, "columns": 10, "mines": 10},
     "intermediate": {"rows": 16, "columns": 16, "mines": 40},
     "hard": {"rows": 16, "columns": 40, "mines": 99},
@@ -273,14 +272,57 @@ class Minesweeper:
             print()  # Newline after each row
 
 
-if __name__ == "__main__":
+import time
+from statistics import mean
+from joblib import Parallel, delayed
+
+
+def play_game(game_id):
+    """
+    Function to simulate a single Minesweeper game.
+    """
     start_time = time.time()
-    board: Minesweeper = Minesweeper("intermediate")
+    board: Minesweeper = Minesweeper("easy")
     counter: int = 0
+
+    # Play the game until it's won or lost
     while not (board.game_won or board.game_over):
-        print(counter)
         board.random_safe_reveal()
         a, b = board.solve_minefield()
-        # counter += 1
-        # print(a, b)
-    print(f"Time taken : {(time.time() - start_time):.2f} seconds.")
+        counter += 1
+
+    # Record time taken and number of moves
+    time_taken = time.time() - start_time
+    return counter, time_taken, game_id
+
+
+if __name__ == "__main__":
+    total_games = 1000
+    n_jobs = 12  # Number of parallel cores to use
+
+    print(f"Simulating {total_games} games using {n_jobs} cores...\n")
+
+    # Run games in parallel
+    results = Parallel(n_jobs=n_jobs)(
+        delayed(play_game)(game_id) for game_id in range(total_games)
+    )
+
+    # Extract moves and time for each game
+    moves_list = [result[0] for result in results]
+    time_list = [result[1] for result in results]
+
+    # Print game details (optional)
+    for counter, (moves, time_taken, game_id) in enumerate(results):
+        print(
+            f"Game: {game_id + 1}, Moves: {moves}, Time Taken: {time_taken:.2f} seconds."
+        )
+
+    # Print summary statistics
+    print("\nSummary Statistics:")
+    print(f"Total Games: {total_games}")
+    print(
+        f"Moves: Min={min(moves_list)}, Max={max(moves_list)}, Avg={mean(moves_list):.2f}"
+    )
+    print(
+        f"Time: Min={min(time_list):.2f} seconds, Max={max(time_list):.2f} seconds, Avg={mean(time_list):.2f} seconds"
+    )

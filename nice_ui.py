@@ -49,12 +49,11 @@ def get_custom_rgb(value: float) -> Tuple[int, int, int]:
         (1, 0.5, 0),  # Orange
         (1, 0, 0),  # Red
     ]
-    custom_colormap = mcolors.LinearSegmentedColormap.from_list(
-        "GreenYellowOrangeRed", colors
-    )
+    custom_colormap = mcolors.LinearSegmentedColormap.from_list("GreenYellowOrangeRed", colors)
     # Get RGB from the custom colormap
     rgb = np.array(custom_colormap(value)[:3]) * 255
-    return tuple(rgb.astype(int))
+    # return tuple(rgb.astype(int))
+    return (int(255 * (2 * value)) if value <= 0.5 else 255, 255 if value <= 0.5 else int(255 * (2 * (1 - value))), 0)
 
 
 def find_clusters(board: np.ndarray, flag: int) -> List[List[Tuple[int, int]]]:
@@ -81,12 +80,7 @@ def find_clusters(board: np.ndarray, flag: int) -> List[List[Tuple[int, int]]]:
             cluster.append((r, c))
             for dr, dc in directions:
                 nr, nc = r + dr, c + dc
-                if (
-                    0 <= nr < rows
-                    and 0 <= nc < cols
-                    and not visited[nr, nc]
-                    and board[nr, nc] == flag
-                ):
+                if 0 <= nr < rows and 0 <= nc < cols and not visited[nr, nc] and board[nr, nc] == flag:
                     visited[nr, nc] = True
                     queue.append((nr, nc))
         return cluster
@@ -167,43 +161,25 @@ def draw_polygon_with_holes(
 
     # Smooth the exterior of the polygon
     smoothed_exterior = (
-        polygon.buffer(
-            dilate_distance, cap_style=1, join_style=1, resolution=resolution
-        )
-        .buffer(
-            -dilate_distance * 3.0, cap_style=1, join_style=1, resolution=resolution
-        )
+        polygon.buffer(dilate_distance, cap_style=1, join_style=1, resolution=resolution)
+        .buffer(-dilate_distance * 3.0, cap_style=1, join_style=1, resolution=resolution)
         .buffer(dilate_distance, cap_style=1, join_style=1, resolution=resolution)
     )
 
     # Draw the smoothed exterior
-    pg.gfxdraw.aapolygon(
-        surface, list(map(tuple, smoothed_exterior.exterior.coords)), fill_color
-    )
-    pg.gfxdraw.filled_polygon(
-        surface, list(map(tuple, smoothed_exterior.exterior.coords)), fill_color
-    )
+    pg.gfxdraw.aapolygon(surface, list(map(tuple, smoothed_exterior.exterior.coords)), fill_color)
+    pg.gfxdraw.filled_polygon(surface, list(map(tuple, smoothed_exterior.exterior.coords)), fill_color)
 
     # Process and draw each hole (interior)
     for interior in polygon.interiors:
         smoothed_hole = (
             Polygon(interior.coords)
-            .buffer(
-                dilate_distance * 1.5, cap_style=1, join_style=1, resolution=resolution
-            )
-            .buffer(
-                -dilate_distance * 2, cap_style=1, join_style=1, resolution=resolution
-            )
-            .buffer(
-                dilate_distance * 1.5, cap_style=1, join_style=1, resolution=resolution
-            )
+            .buffer(dilate_distance * 1.5, cap_style=1, join_style=1, resolution=resolution)
+            .buffer(-dilate_distance * 2, cap_style=1, join_style=1, resolution=resolution)
+            .buffer(dilate_distance * 1.5, cap_style=1, join_style=1, resolution=resolution)
         )
-        pg.gfxdraw.aapolygon(
-            surface, list(map(tuple, smoothed_hole.exterior.coords)), background_color
-        )
-        pg.gfxdraw.filled_polygon(
-            surface, list(map(tuple, smoothed_hole.exterior.coords)), background_color
-        )
+        pg.gfxdraw.aapolygon(surface, list(map(tuple, smoothed_hole.exterior.coords)), background_color)
+        pg.gfxdraw.filled_polygon(surface, list(map(tuple, smoothed_hole.exterior.coords)), background_color)
 
 
 class GUI:
@@ -224,18 +200,8 @@ class GUI:
 
         # Calculate board dimensions
         rows, cols = self.board.shape
-        self.width: int = (
-            BORDER_SIZE * 2
-            + cols * CELL_SIZE
-            + (cols - 1) * (LINE_WIDTH + BORDER_SIZE * 2)
-            + 1
-        )
-        self.height: int = (
-            BORDER_SIZE * 2
-            + rows * CELL_SIZE
-            + (rows - 1) * (LINE_WIDTH + BORDER_SIZE * 2)
-            + 1
-        )
+        self.width: int = BORDER_SIZE * 2 + cols * CELL_SIZE + (cols - 1) * (LINE_WIDTH + BORDER_SIZE * 2) + 1
+        self.height: int = BORDER_SIZE * 2 + rows * CELL_SIZE + (rows - 1) * (LINE_WIDTH + BORDER_SIZE * 2) + 1
 
         # Initialize game state
         self.running: bool = True
@@ -243,7 +209,7 @@ class GUI:
         # Initialize pygame
         pg.init()
         pg.font.init()
-        self.font: pg.font.Font = pg.font.SysFont("dseg7classicregular", font_size)
+        self.font: pg.font.Font = pg.font.SysFont("orbitronmedium", font_size)
         self.clock: pg.time.Clock = pg.time.Clock()
         self.screen: pg.Surface = pg.display.set_mode((self.width, self.height))
         pg.display.set_caption("Minesweeper")
@@ -317,12 +283,8 @@ class GUI:
             if event.button == pg.BUTTON_LEFT:  # Left click
                 mouse_x, mouse_y = event.pos  # Get mouse position
                 # Pixel space to cell space
-                col = (mouse_x - BORDER_SIZE) // (
-                    CELL_SIZE + LINE_WIDTH + BORDER_SIZE * 2
-                )
-                row = (mouse_y - BORDER_SIZE) // (
-                    CELL_SIZE + LINE_WIDTH + BORDER_SIZE * 2
-                )
+                col = (mouse_x - BORDER_SIZE) // (CELL_SIZE + LINE_WIDTH + BORDER_SIZE * 2)
+                row = (mouse_y - BORDER_SIZE) // (CELL_SIZE + LINE_WIDTH + BORDER_SIZE * 2)
                 if 0 <= row < self.board.n_rows and 0 <= col < self.board.n_cols:
                     if self.board.minefield[row, col]["mine_count"] == -1:
                         self.board.reveal_all_mines()
@@ -349,7 +311,7 @@ class GUI:
             self.screen.blit(overlay, (0, 0))
 
             # Render text
-            font = pygame.font.Font(None, 60)  # Use default font, size 60
+            font = self.font  # Use default font, size 60
             if self.board.game_over:
                 text = "Game Over, Press 'R' to Restart"
             else:
@@ -371,20 +333,14 @@ class GUI:
 
     def draw_mine(self, x: int, y: int, size: int):
         rect = pygame.Rect(x, y, size, size)
-        polygon = Polygon(
-            [rect.topleft, rect.topright, rect.bottomright, rect.bottomleft]
-        )
+        polygon = Polygon([rect.topleft, rect.topright, rect.bottomright, rect.bottomleft])
         resolution = max(16, int(polygon.length / 10))
         dilate_distance = CELL_SIZE // 9
 
         # Smooth the exterior of the polygon
         smoothed_exterior = (
-            polygon.buffer(
-                dilate_distance, cap_style=1, join_style=1, resolution=resolution
-            )
-            .buffer(
-                -dilate_distance * 3.0, cap_style=1, join_style=1, resolution=resolution
-            )
+            polygon.buffer(dilate_distance, cap_style=1, join_style=1, resolution=resolution)
+            .buffer(-dilate_distance * 3.0, cap_style=1, join_style=1, resolution=resolution)
             .buffer(dilate_distance, cap_style=1, join_style=1, resolution=resolution)
         )
 
@@ -404,12 +360,8 @@ class GUI:
         # Draw the black center circle
         center_x, center_y = x + size // 2, y + size // 2
         center_radius = size // 3
-        pygame.gfxdraw.aacircle(
-            self.screen, center_x, center_y, center_radius, pygame.Color("black")
-        )
-        pygame.gfxdraw.filled_circle(
-            self.screen, center_x, center_y, center_radius, pygame.Color("black")
-        )
+        pygame.gfxdraw.aacircle(self.screen, center_x, center_y, center_radius, pygame.Color("black"))
+        pygame.gfxdraw.filled_circle(self.screen, center_x, center_y, center_radius, pygame.Color("black"))
 
         # Line properties
         line_length = size // 2.4
@@ -435,9 +387,7 @@ class GUI:
         )
 
         # Rotate the '+' lines by 45 degrees to form an 'X'
-        diagonal_offset = int(
-            0.95 * line_length * np.sqrt(2) / 2
-        )  # Diagonal length for 45-degree rotation
+        diagonal_offset = int(0.95 * line_length * np.sqrt(2) / 2)  # Diagonal length for 45-degree rotation
 
         # Diagonal line (top-left to bottom-right)
         pygame.draw.line(
@@ -467,12 +417,8 @@ class GUI:
             (center_x + diagonal_offset, center_y - diagonal_offset),  # Top-right tip
         ]
         for tip in tips:
-            pygame.gfxdraw.aacircle(
-                self.screen, tip[0], tip[1], tip_radius, pygame.Color("black")
-            )
-            pygame.gfxdraw.filled_circle(
-                self.screen, tip[0], tip[1], tip_radius, pygame.Color("black")
-            )
+            pygame.gfxdraw.aacircle(self.screen, tip[0], tip[1], tip_radius, pygame.Color("black"))
+            pygame.gfxdraw.filled_circle(self.screen, tip[0], tip[1], tip_radius, pygame.Color("black"))
 
     def draw_mines(self):
         if self.board.game_over:
@@ -492,24 +438,16 @@ class GUI:
                 # Draw uncovered cells with mine counts
                 if cell["state"] == self.board.states.UNCOVERED.value:
                     if cell["mine_count"] > 0:
-                        text_surface = self.font.render(
-                            f"{cell['mine_count']}", True, text_color
-                        )
-                        text_rect = text_surface.get_rect(
-                            center=(x + CELL_SIZE // 2, y + CELL_SIZE // 2)
-                        )
+                        text_surface = self.font.render(f"{cell['mine_count']}", True, text_color)
+                        text_rect = text_surface.get_rect(center=(x + CELL_SIZE // 2, y + CELL_SIZE // 2))
                         self.screen.blit(text_surface, text_rect)
 
                 # Draw covered cells with probabilities (if available)
                 if cell["state"] == self.board.states.COVERED.value:
                     if self.probability is not None:
                         probability = self.probability[row, col]
-                        text_surface = self.font.render(
-                            f"{probability:.2f}", True, get_custom_rgb(probability)
-                        )
-                        text_rect = text_surface.get_rect(
-                            center=(x + CELL_SIZE // 2, y + CELL_SIZE // 2)
-                        )
+                        text_surface = self.font.render(f"{probability:.1f}", True, get_custom_rgb(probability))
+                        text_rect = text_surface.get_rect(center=(x + CELL_SIZE // 2, y + CELL_SIZE // 2))
                         self.screen.blit(text_surface, text_rect)
 
     def draw_lines(self):
@@ -523,15 +461,11 @@ class GUI:
                 self.screen,
                 line_color,
                 (
-                    BORDER_SIZE * 2 * (col + 1)
-                    + CELL_SIZE * (col + 1)
-                    + LINE_WIDTH * col,
+                    BORDER_SIZE * 2 * (col + 1) + CELL_SIZE * (col + 1) + LINE_WIDTH * col,
                     seg_start + gap_size,
                 ),
                 (
-                    BORDER_SIZE * 2 * (col + 1)
-                    + CELL_SIZE * (col + 1)
-                    + LINE_WIDTH * col,
+                    BORDER_SIZE * 2 * (col + 1) + CELL_SIZE * (col + 1) + LINE_WIDTH * col,
                     min(seg_start + segment_length, self.height),
                 ),
                 1,
@@ -547,15 +481,11 @@ class GUI:
                 line_color,
                 (
                     seg_start + gap_size,
-                    BORDER_SIZE * 2 * (row + 1)
-                    + CELL_SIZE * (row + 1)
-                    + LINE_WIDTH * row,
+                    BORDER_SIZE * 2 * (row + 1) + CELL_SIZE * (row + 1) + LINE_WIDTH * row,
                 ),
                 (
                     min(seg_start + segment_length, self.width),
-                    BORDER_SIZE * 2 * (row + 1)
-                    + CELL_SIZE * (row + 1)
-                    + LINE_WIDTH * row,
+                    BORDER_SIZE * 2 * (row + 1) + CELL_SIZE * (row + 1) + LINE_WIDTH * row,
                 ),
                 1,
             )

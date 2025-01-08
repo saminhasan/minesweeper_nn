@@ -4,12 +4,12 @@ from game_engine import Minesweeper, game_mode
 from sklearn.model_selection import train_test_split
 from joblib import Parallel, delayed
 
-mode = "easy"
+mode = "test"
 N = game_mode[mode]["rows"]
 M = game_mode[mode]["columns"]
 
 # Constants
-NUM_GAMES = 2096
+NUM_GAMES = 512
 INPUT_SHAPE = (N, M)  # Replace with actual dimensions
 LABEL_SHAPE = (N, M)
 TEST_RATIO = 0.2
@@ -17,7 +17,7 @@ VAL_RATIO = 0.2
 NUM_CORES = 12  # Number of parallel processes
 
 # Directory structure
-DATASET_DIR = "minesweeper_dataset"
+DATASET_DIR = "minesweeper_dataset_test_512"
 TRAIN_DIR = os.path.join(DATASET_DIR, "train")
 VAL_DIR = os.path.join(DATASET_DIR, "val")
 TEST_DIR = os.path.join(DATASET_DIR, "test")

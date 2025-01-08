@@ -3,16 +3,7 @@ from typing import Tuple
 
 class CustomColormap:
     def __init__(self):
-        """
-        Initializes a Green-Yellow-Orange-Red colormap with pre-defined RGB values.
-        """
-        self.colors = [
-            (0, 255, 0),  # Green
-            (255, 255, 0),  # Yellow
-            (255, 128, 0),  # Orange
-            (255, 0, 0),  # Red
-        ]
-        self.num_segments = len(self.colors) - 1
+        pass
 
     def get_rgb(self, value: float) -> Tuple[int, int, int]:
         """
@@ -25,21 +16,7 @@ class CustomColormap:
         if not 0 <= value <= 1:
             raise ValueError("Value must be between 0 and 1")
 
-        # Scale value to the number of segments
-        scaled_value = value * self.num_segments
-        idx = int(scaled_value)  # Find the segment index
-        t = scaled_value - idx  # Fractional part within the segment
-
-        # Get the start and end colors for interpolation
-        color1 = self.colors[idx]
-        color2 = self.colors[min(idx + 1, self.num_segments)]
-
-        # Linear interpolation for each RGB channel
-        r = int((1 - t) * color1[0] + t * color2[0])
-        g = int((1 - t) * color1[1] + t * color2[1])
-        b = int((1 - t) * color1[2] + t * color2[2])
-
-        return r, g, b
+        return (int(255 * (2 * value)) if value <= 0.5 else 255, 255 if value <= 0.5 else int(255 * (2 * (1 - value))), 0)
 
 
 import matplotlib.pyplot as plt
@@ -54,9 +31,7 @@ if __name__ == "__main__":
 
     # Map the data to RGB colors using the custom colormap
     rgb_data = np.array([colormap.get_rgb(value) for value in data.ravel()])
-    rgb_data = (
-        rgb_data.reshape(*data.shape, 3) / 255
-    )  # Reshape and normalize to [0, 1] for matplotlib
+    rgb_data = rgb_data.reshape(*data.shape, 3) / 255  # Reshape and normalize to [0, 1] for matplotlib
 
     # Create a figure and axes
     fig, ax = plt.subplots()
