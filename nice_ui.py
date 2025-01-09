@@ -391,6 +391,7 @@ class GUI:
             )
             for cluster in find_clusters(self.board.minefield["state"], COVERED)
         ]
+        blur_bg(self.screen, sigma=0.8)
 
     def draw_mines(self):
         [
