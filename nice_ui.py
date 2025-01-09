@@ -10,10 +10,23 @@ from collections import deque
 from game_engine import Minesweeper
 from shapely.ops import unary_union
 from shapely.geometry import Polygon
+from scipy.ndimage import gaussian_filter
 from typing import Dict, List, Tuple, Callable
 
+
+def blur_bg(screen, sigma=0.5):
+    """Apply a gaussian filter to each colour plane"""
+    # Get reference pixels for each colour plane and then apply filter
+    r = pygame.surfarray.pixels_red(screen)
+    gaussian_filter(r, sigma=sigma, mode="nearest", output=r)
+    g = pygame.surfarray.pixels_green(screen)
+    gaussian_filter(g, sigma=sigma, mode="nearest", output=g)
+    b = pygame.surfarray.pixels_blue(screen)
+    gaussian_filter(b, sigma=sigma, mode="nearest", output=b)
+
+
 # Constants with explicit type annotations
-CELL_SIZE: int = 48
+CELL_SIZE: int = 84
 LINE_WIDTH: int = 0
 BORDER_SIZE: int = 0
 COVERED: int = -1
@@ -222,9 +235,11 @@ class GUI:
         # Initialize pygame
         pg.init()
         pg.font.init()
-        self.mine_image: pg.Surface = pg.image.load("minesweeper_icon.png")  # Load icon image
+        self.mine_image: pg.Surface = pg.image.load("mine.png")  # Load icon image
         # Scale the mine image to fit the cell size
         self.scaled_mine_image = pg.transform.scale(self.mine_image, (CELL_SIZE, CELL_SIZE))
+        self.flag_image = pg.image.load("flag.png")
+        self.scaled_flag_image = pg.transform.scale(self.flag_image, (CELL_SIZE // 2, CELL_SIZE // 2))
         pg.display.set_icon(self.mine_image)  # Set the icon for the window
 
         self.font: pg.font.Font = pg.font.SysFont("orbitronmedium", font_size)
@@ -292,18 +307,19 @@ class GUI:
             event (pg.event.Event): The pygame mouse event object.
         """
         if not (self.board.game_over or self.board.game_won):
-            if event.button == pg.BUTTON_LEFT:  # Left click
-                mouse_x, mouse_y = event.pos  # Get mouse position
-                # Pixel space to cell space
-                col = (mouse_x - BORDER_SIZE) // (CELL_SIZE + LINE_WIDTH + BORDER_SIZE * 2)
-                row = (mouse_y - BORDER_SIZE) // (CELL_SIZE + LINE_WIDTH + BORDER_SIZE * 2)
-                if 0 <= row < self.board.n_rows and 0 <= col < self.board.n_cols:
-                    if self.board.minefield[row, col]["mine_count"] == -1:
-                        self.board.reveal_all_mines()
-                        print("Game Over")
-                    elif not self.board.game_over:
-                        self.board.reveal(row, col)
-                        _, self.probability = self.board.solve_minefield()
+            if event.type == pg.MOUSEBUTTONDOWN:
+                if event.button == pg.BUTTON_LEFT:  # Left click
+                    mouse_x, mouse_y = event.pos  # Get mouse position
+                    # Pixel space to cell space
+                    col = (mouse_x - BORDER_SIZE) // (CELL_SIZE + LINE_WIDTH + BORDER_SIZE * 2)
+                    row = (mouse_y - BORDER_SIZE) // (CELL_SIZE + LINE_WIDTH + BORDER_SIZE * 2)
+                    if 0 <= row < self.board.n_rows and 0 <= col < self.board.n_cols:
+                        if self.board.minefield[row, col]["mine_count"] == -1:
+                            self.board.reveal_all_mines()
+                            print("Game Over")
+                        elif not self.board.game_over:
+                            self.board.reveal(row, col)
+                            _, self.probability = self.board.solve_minefield()
 
     def draw(self) -> None:
         """
@@ -316,33 +332,36 @@ class GUI:
         if self.board.game_over:
             # Handle game over
             self.draw_mines()
-
             # Create a transparent overlay surface
             overlay = pygame.Surface(self.screen.get_size(), pygame.SRCALPHA)
-            overlay.fill((128, 0, 0, 128))  # Semi-transparent black background
+            overlay.fill((64, 0, 0, 64))  # Semi-transparent red background
             self.screen.blit(overlay, (0, 0))
-
             # Display game over message
             main_text = "Game Over, Press 'R' to Restart"
+            self.draw_lines()
         elif self.board.game_won:
             # Handle game won
             self.draw_clusters()
-            self.draw_cells_bayes()
+            self.draw_flags()
 
+            # self.draw_cells_bayes()
             # Create a transparent overlay surface
             overlay = pygame.Surface(self.screen.get_size(), pygame.SRCALPHA)
-            overlay.fill((0, 128, 0, 128))  # Semi-transparent green background
+            overlay.fill((0, 64, 0, 64))  # Semi-transparent green background
             self.screen.blit(overlay, (0, 0))
 
             # Display game won message
             main_text = "Game Won, Press 'R' to Restart"
+            self.draw_lines()
         else:
             # Handle normal game state
             self.draw_clusters()
             self.draw_cells_bayes()
             self.draw_lines()
-            return  # Skip the rest since no overlay or text is needed
+            blur_bg(self.screen, sigma=0.25)
 
+            return  # Skip the rest since no overlay or text is needed
+        blur_bg(self.screen, sigma=2)
         # Render main text
         main_text_surface = self.font.render(main_text, True, (255, 255, 255))  # White text
         main_text_rect = main_text_surface.get_rect(center=(self.width // 2, self.height // 3))
@@ -365,8 +384,6 @@ class GUI:
         self.screen.blit(level_surface, level_rect)
         [self.screen.blit(surface, rect) for surface, rect in zip(options_surfaces, options_rects)]
 
-        self.draw_lines()
-
     def draw_clusters(self):
         [
             draw_polygon_with_holes(
@@ -382,6 +399,24 @@ class GUI:
                 (
                     BORDER_SIZE + col * (CELL_SIZE + BORDER_SIZE * 2 + LINE_WIDTH) + 1,
                     BORDER_SIZE + row * (CELL_SIZE + BORDER_SIZE * 2 + LINE_WIDTH) + 1,
+                ),
+            )
+            for row, col in self.board.mines
+        ]
+
+    def draw_flags(self):
+        [
+            self.screen.blit(
+                self.scaled_flag_image,
+                (
+                    BORDER_SIZE
+                    + col * (CELL_SIZE + BORDER_SIZE * 2 + LINE_WIDTH)
+                    + 1
+                    + self.scaled_flag_image.get_width() // 2,
+                    BORDER_SIZE
+                    + row * (CELL_SIZE + BORDER_SIZE * 2 + LINE_WIDTH)
+                    + 1
+                    + self.scaled_flag_image.get_height() // 2,
                 ),
             )
             for row, col in self.board.mines

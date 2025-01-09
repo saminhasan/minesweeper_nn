@@ -10,9 +10,8 @@ from enum import Enum
 
 from typing import Any, Set, Dict, List, Tuple
 
-# Type-hinted dictionary for game modes
 game_mode: Dict[str, Dict[str, int]] = {
-    "test": {"rows": 5, "columns": 5, "mines": 5},
+    "test": {"rows": 5, "columns": 5, "mines": 2},
     "easy": {"rows": 10, "columns": 10, "mines": 10},
     "intermediate": {"rows": 16, "columns": 16, "mines": 40},
     "hard": {"rows": 16, "columns": 40, "mines": 99},
