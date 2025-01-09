@@ -16,6 +16,7 @@ game_mode: Dict[str, Dict[str, int]] = {
     "easy": {"rows": 10, "columns": 10, "mines": 10},
     "intermediate": {"rows": 16, "columns": 16, "mines": 40},
     "hard": {"rows": 16, "columns": 40, "mines": 99},
+    "xtreme": {"rows": 20, "columns": 40, "mines": 128},
 }
 
 
@@ -63,17 +64,13 @@ class Minesweeper:
                 ("state", np.int8),
             ]
         )
-        self.minefield: np.ndarray = np.zeros(
-            (self.n_rows, self.n_cols), dtype=self.cell_dtype
-        )
+        self.minefield: np.ndarray = np.zeros((self.n_rows, self.n_cols), dtype=self.cell_dtype)
         self.minefield["state"] = self.states.COVERED.value
         self.mines: Set[Tuple[int, int]] = set()
         self.place_mines()
 
     def place_mines(self) -> None:
-        indices: List[Tuple[int, int]] = list(
-            np.indices(self.shape).reshape(len(self.shape), -1).T
-        )
+        indices: List[Tuple[int, int]] = list(np.indices(self.shape).reshape(len(self.shape), -1).T)
         mine_indices: List[Tuple[int, int]] = random.sample(indices, self.n_mines)
         for i, j in mine_indices:
             self.mines.add((i, j))
@@ -85,11 +82,7 @@ class Minesweeper:
             neighbors["mine_count"][no_mine] += 1
 
     def reveal(self, i: int, j: int) -> None:
-        if (
-            self.game_over
-            or self.game_won
-            or self.minefield[i, j]["state"] != State.COVERED.value
-        ):
+        if self.game_over or self.game_won or self.minefield[i, j]["state"] != State.COVERED.value:
             return
 
         if self.minefield[i, j]["mine_count"] == -1:
@@ -117,9 +110,7 @@ class Minesweeper:
             print("You won!", flush=True)
 
     def random_safe_reveal(self) -> None:
-        covered_mask = (self.minefield["state"] == State.COVERED.value) & (
-            self.minefield["mine_count"] != -1
-        )
+        covered_mask = (self.minefield["state"] == State.COVERED.value) & (self.minefield["mine_count"] != -1)
         safe_cells = np.argwhere(covered_mask)
 
         if safe_cells.size == 0:
@@ -131,9 +122,7 @@ class Minesweeper:
 
     def reveal_all_mines(self) -> None:
         mine_coords = np.array(list(self.mines))
-        self.minefield[mine_coords[:, 0], mine_coords[:, 1]][
-            "state"
-        ] = State.UNCOVERED.value
+        self.minefield[mine_coords[:, 0], mine_coords[:, 1]]["state"] = State.UNCOVERED.value
         self.game_over = True
         self.game_won = False
 
@@ -193,10 +182,7 @@ class Minesweeper:
                     covered_neighbors: List[str] = []
 
                     for x, y in neighbors:
-                        if (
-                            self.minefield[x, y]["state"] == State.COVERED.value
-                            or State.FLAGGED.value
-                        ):
+                        if self.minefield[x, y]["state"] == State.COVERED.value or State.FLAGGED.value:
                             if (x, y) not in tags:
                                 tag: str = tag_generator.next_tag()
                                 tags[(x, y)] = tag
@@ -208,14 +194,10 @@ class Minesweeper:
 
         return rules
 
-    def decode_solution(
-        self, solution: Dict[str, float]
-    ) -> Tuple[Dict[Tuple[int, int], float], np.ndarray]:
+    def decode_solution(self, solution: Dict[str, float]) -> Tuple[Dict[Tuple[int, int], float], np.ndarray]:
         decoded_solution: Dict[Tuple[int, int], float] = {}
         try:
-            probability_array: np.ndarray = (
-                np.zeros((self.n_rows, self.n_cols)) + solution[None]
-            )
+            probability_array: np.ndarray = np.zeros((self.n_rows, self.n_cols)) + solution[None]
         except KeyError:
             probability_array = np.zeros((self.n_rows, self.n_cols))
 
@@ -229,20 +211,14 @@ class Minesweeper:
     def solve_minefield(self) -> Tuple[Dict[Tuple[int, int], float], np.ndarray]:
         rules: List[Any] = self.create_rules_from_minefield()
         total_cells: int = self.n_rows * self.n_cols
-        results = solve(
-            rules, MineCount(total_cells=total_cells, total_mines=self.n_mines)
-        )
+        results = solve(rules, MineCount(total_cells=total_cells, total_mines=self.n_mines))
         return self.decode_solution(results)
 
     def get_input(self) -> np.ndarray:
-        display_array: np.ndarray = np.full_like(
-            self.minefield["mine_count"], self.states.COVERED.value
-        )
-        display_array[self.minefield["state"] == self.states.UNCOVERED.value] = (
-            self.minefield["mine_count"][
-                self.minefield["state"] == self.states.UNCOVERED.value
-            ]
-        )
+        display_array: np.ndarray = np.full_like(self.minefield["mine_count"], self.states.COVERED.value)
+        display_array[self.minefield["state"] == self.states.UNCOVERED.value] = self.minefield["mine_count"][
+            self.minefield["state"] == self.states.UNCOVERED.value
+        ]
         display_array = ((display_array + 1) / 9) * (display_array >= 0)
         return display_array
 
@@ -303,9 +279,7 @@ if __name__ == "__main__":
     print(f"Simulating {total_games} games using {n_jobs} cores...\n")
 
     # Run games in parallel
-    results = Parallel(n_jobs=n_jobs)(
-        delayed(play_game)(game_id) for game_id in range(total_games)
-    )
+    results = Parallel(n_jobs=n_jobs)(delayed(play_game)(game_id) for game_id in range(total_games))
 
     # Extract moves and time for each game
     moves_list = [result[0] for result in results]
@@ -313,16 +287,10 @@ if __name__ == "__main__":
 
     # Print game details (optional)
     for counter, (moves, time_taken, game_id) in enumerate(results):
-        print(
-            f"Game: {game_id + 1}, Moves: {moves}, Time Taken: {time_taken:.2f} seconds."
-        )
+        print(f"Game: {game_id + 1}, Moves: {moves}, Time Taken: {time_taken:.2f} seconds.")
 
     # Print summary statistics
     print("\nSummary Statistics:")
     print(f"Total Games: {total_games}")
-    print(
-        f"Moves: Min={min(moves_list)}, Max={max(moves_list)}, Avg={mean(moves_list):.2f}"
-    )
-    print(
-        f"Time: Min={min(time_list):.2f} seconds, Max={max(time_list):.2f} seconds, Avg={mean(time_list):.2f} seconds"
-    )
+    print(f"Moves: Min={min(moves_list)}, Max={max(moves_list)}, Avg={mean(moves_list):.2f}")
+    print(f"Time: Min={min(time_list):.2f} seconds, Max={max(time_list):.2f} seconds, Avg={mean(time_list):.2f} seconds")

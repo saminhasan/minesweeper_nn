@@ -1,15 +1,16 @@
 import os
-import sys
-import random
+
+os.environ["PYGAME_HIDE_SUPPORT_PROMPT"] = "1"
+import ctypes
 import asyncio
 import numpy as np
 import pygame as pg
 import pygame.gfxdraw
-import matplotlib.colors as mcolors
+from collections import deque
 from game_engine import Minesweeper
 from shapely.ops import unary_union
 from shapely.geometry import Polygon
-from typing import Any, Dict, List, Tuple, Callable
+from typing import Dict, List, Tuple, Callable
 
 # Constants with explicit type annotations
 CELL_SIZE: int = 48
@@ -24,35 +25,40 @@ background_color: Tuple[int, int, int] = (5, 5, 5)
 text_color: Tuple[int, int, int] = (220, 220, 220)
 font_size: int = 16
 
-levels = {
-    0: "test",
-    1: "easy",
-    2: "intermediate",
-    3: "hard",
-}
+levels = {0: "test", 1: "easy", 2: "intermediate", 3: "hard", 4: "xtreme"}
 
 
 def get_custom_rgb(value: float) -> Tuple[int, int, int]:
     """
-    Custom Green-Yellow-Orange-Red colormap.
+    Generate an RGB color from a custom Green-to-Yellow-to-Red colormap based on a value.
+
+    The colormap transitions smoothly in the HSV color space, varying only the Hue (H) value,
+    while keeping Saturation (S) and Value (V) constant. The resulting colors are converted
+    to RGB for practical use. This colormap is designed to visually represent safety (green)
+    and danger (red), with yellow as a midpoint.
+
     Parameters:
-        value (float): A value between 0 and 1.
+        value (float): A value between 0 and 1, where:
+                       - 0 maps to green (safe),
+                       - 0.5 maps to yellow,
+                       - 1 maps to red (danger).
+
     Returns:
         Tuple[int, int, int]: A tuple of (R, G, B) values scaled to 0-255.
+
+    Raises:
+        ValueError: If the input value is not between 0 and 1.
+
+    Example:
+        >>> get_custom_rgb(0.0)
+        (0, 255, 0)  # Green
+        >>> get_custom_rgb(0.5)
+        (255, 255, 0)  # Yellow
+        >>> get_custom_rgb(1.0)
+        (255, 0, 0)  # Red
     """
     if not 0 <= value <= 1:
         raise ValueError("Value must be between 0 and 1")
-    # Define the custom colormap: Green -> Yellow -> Orange -> Red
-    colors = [
-        (0, 1, 0),  # Green
-        (1, 1, 0),  # Yellow
-        (1, 0.5, 0),  # Orange
-        (1, 0, 0),  # Red
-    ]
-    custom_colormap = mcolors.LinearSegmentedColormap.from_list("GreenYellowOrangeRed", colors)
-    # Get RGB from the custom colormap
-    rgb = np.array(custom_colormap(value)[:3]) * 255
-    # return tuple(rgb.astype(int))
     return (int(255 * (2 * value)) if value <= 0.5 else 255, 255 if value <= 0.5 else int(255 * (2 * (1 - value))), 0)
 
 
@@ -73,16 +79,19 @@ def find_clusters(board: np.ndarray, flag: int) -> List[List[Tuple[int, int]]]:
 
     def flood_fill_iterative(start_r: int, start_c: int) -> List[Tuple[int, int]]:
         cluster: List[Tuple[int, int]] = []
-        queue: List[Tuple[int, int]] = [(start_r, start_c)]
+        queue: deque = deque([(start_r, start_c)])  # Use deque for the queue
         visited[start_r, start_c] = True
+
         while queue:
-            r, c = queue.pop(0)
+            r, c = queue.popleft()  # Deque's popleft is O(1)
             cluster.append((r, c))
+
             for dr, dc in directions:
                 nr, nc = r + dr, c + dc
                 if 0 <= nr < rows and 0 <= nc < cols and not visited[nr, nc] and board[nr, nc] == flag:
                     visited[nr, nc] = True
-                    queue.append((nr, nc))
+                    queue.append((nr, nc))  # Deque's append is O(1)
+
         return cluster
 
     # List comprehension for the clusters
@@ -185,9 +194,13 @@ def draw_polygon_with_holes(
 class GUI:
     def __init__(self, level: str):
         self.level = levels[level]  # Store the level for resetting the game
+        self.init = True
         self.init_game()
 
     def init_game(self):
+        if self.init:
+            pg.quit()
+
         """
         Initialize the Minesweeper GUI.
 
@@ -209,8 +222,18 @@ class GUI:
         # Initialize pygame
         pg.init()
         pg.font.init()
+        self.mine_image: pg.Surface = pg.image.load("minesweeper_icon.png")  # Load icon image
+        # Scale the mine image to fit the cell size
+        self.scaled_mine_image = pg.transform.scale(self.mine_image, (CELL_SIZE, CELL_SIZE))
+        pg.display.set_icon(self.mine_image)  # Set the icon for the window
+
         self.font: pg.font.Font = pg.font.SysFont("orbitronmedium", font_size)
         self.clock: pg.time.Clock = pg.time.Clock()
+
+        # Calculate the screen's center position for the window
+        user32 = ctypes.windll.user32
+        screen_width, screen_height = user32.GetSystemMetrics(0), user32.GetSystemMetrics(1)
+        os.environ["SDL_VIDEO_WINDOW_POS"] = f"{(screen_width - self.width) // 2},{(screen_height - self.height) // 2}"
         self.screen: pg.Surface = pg.display.set_mode((self.width, self.height))
         pg.display.set_caption("Minesweeper")
 
@@ -253,19 +276,8 @@ class GUI:
         if key == pg.K_r:  # Check if 'R' key is pressed
             self.reset_game()
 
-        if key == pg.K_0:
-            self.level = levels[0]
-            self.reset_game()
-        if key == pg.K_1:
-            self.level = levels[1]
-            self.reset_game()
-
-        if key == pg.K_2:
-            self.level = levels[2]
-            self.reset_game()
-
-        if key == pg.K_3:
-            self.level = levels[3]
+        if key in [pg.K_0, pg.K_1, pg.K_2, pg.K_3, pg.K_4]:
+            self.level = levels[key - pg.K_0]
             self.reset_game()
         else:
             handler = self.key_event_handlers.get(key)
@@ -299,133 +311,81 @@ class GUI:
         """
         # Fill the screen with the background color
         self.screen.fill(background_color)
-        self.draw_clusters()
-        self.draw_mines()
-        self.draw_cells_bayes()
-        self.draw_lines()
-        # Check for game over or won condition
-        if self.board.game_won or self.board.game_over:
+
+        # Check for game state
+        if self.board.game_over:
+            # Handle game over
+            self.draw_mines()
+
             # Create a transparent overlay surface
             overlay = pygame.Surface(self.screen.get_size(), pygame.SRCALPHA)
-            overlay.fill((0, 0, 0, 128))  # Semi-transparent black background
+            overlay.fill((128, 0, 0, 128))  # Semi-transparent black background
             self.screen.blit(overlay, (0, 0))
 
-            # Render text
-            font = self.font  # Use default font, size 60
-            if self.board.game_over:
-                text = "Game Over, Press 'R' to Restart"
-            else:
-                text = "Game Won, Press 'R' to Restart"
-            text_surface = font.render(text, True, (255, 255, 255))  # White text
-            text_rect = text_surface.get_rect(center=self.screen.get_rect().center)
+            # Display game over message
+            main_text = "Game Over, Press 'R' to Restart"
+        elif self.board.game_won:
+            # Handle game won
+            self.draw_clusters()
+            self.draw_cells_bayes()
 
-            # Draw the text
-            self.screen.blit(text_surface, text_rect)
+            # Create a transparent overlay surface
+            overlay = pygame.Surface(self.screen.get_size(), pygame.SRCALPHA)
+            overlay.fill((0, 128, 0, 128))  # Semi-transparent green background
+            self.screen.blit(overlay, (0, 0))
+
+            # Display game won message
+            main_text = "Game Won, Press 'R' to Restart"
+        else:
+            # Handle normal game state
+            self.draw_clusters()
+            self.draw_cells_bayes()
+            self.draw_lines()
+            return  # Skip the rest since no overlay or text is needed
+
+        # Render main text
+        main_text_surface = self.font.render(main_text, True, (255, 255, 255))  # White text
+        main_text_rect = main_text_surface.get_rect(center=(self.width // 2, self.height // 3))
+
+        # Render level text
+        level_text = f"Current Level: {self.level.capitalize()}"  # Capitalize level string
+        level_surface = self.font.render(level_text, True, (255, 255, 255))
+        level_rect = level_surface.get_rect(center=(self.width // 2, self.height // 2))
+
+        # Render options text (split into lines)
+        options_lines = ["Press 1 - Easy", "Press 2 - Intermediate", "Press 3 - Hard", "Press 4 - Extreme"]
+        options_surfaces = [self.font.render(line, True, (255, 255, 255)) for line in options_lines]
+        options_rects = [
+            surface.get_rect(center=(self.width // 2, (2 * self.height) // 3 + i * 30))  # Adjust vertical spacing
+            for i, surface in enumerate(options_surfaces)
+        ]
+
+        # Draw everything
+        self.screen.blit(main_text_surface, main_text_rect)
+        self.screen.blit(level_surface, level_rect)
+        [self.screen.blit(surface, rect) for surface, rect in zip(options_surfaces, options_rects)]
+
+        self.draw_lines()
 
     def draw_clusters(self):
-        # Draw clusters
-        board = self.board.minefield["state"]
-        clusters = find_clusters(board, COVERED)
-        for cluster in clusters:
-            rects = get_rects_from_cluster(cluster)
-            polygon = rects_to_polygon(rects)
-            draw_polygon_with_holes(self.screen, polygon, cell_color, background_color)
-
-    def draw_mine(self, x: int, y: int, size: int):
-        rect = pygame.Rect(x, y, size, size)
-        polygon = Polygon([rect.topleft, rect.topright, rect.bottomright, rect.bottomleft])
-        resolution = max(16, int(polygon.length / 10))
-        dilate_distance = CELL_SIZE // 9
-
-        # Smooth the exterior of the polygon
-        smoothed_exterior = (
-            polygon.buffer(dilate_distance, cap_style=1, join_style=1, resolution=resolution)
-            .buffer(-dilate_distance * 3.0, cap_style=1, join_style=1, resolution=resolution)
-            .buffer(dilate_distance, cap_style=1, join_style=1, resolution=resolution)
-        )
-
-        # Draw the smoothed exterior
-        pg.gfxdraw.aapolygon(
-            self.screen,
-            list(map(tuple, smoothed_exterior.exterior.coords)),
-            pygame.Color("grey55"),
-        )
-        pg.gfxdraw.filled_polygon(
-            self.screen,
-            list(map(tuple, smoothed_exterior.exterior.coords)),
-            pygame.Color("grey55"),
-        )
-        # pygame.draw.rect(self.screen, pygame.Color("red"), rect)
-
-        # Draw the black center circle
-        center_x, center_y = x + size // 2, y + size // 2
-        center_radius = size // 3
-        pygame.gfxdraw.aacircle(self.screen, center_x, center_y, center_radius, pygame.Color("black"))
-        pygame.gfxdraw.filled_circle(self.screen, center_x, center_y, center_radius, pygame.Color("black"))
-
-        # Line properties
-        line_length = size // 2.4
-        line_thickness = size // 12
-        tip_radius = size // 30
-
-        # Draw the '+' lines
-        # Horizontal line
-        pygame.draw.line(
-            self.screen,
-            pygame.Color("black"),
-            (center_x - int(line_length), center_y),
-            (center_x + int(line_length), center_y),
-            line_thickness,
-        )
-        # Vertical line
-        pygame.draw.line(
-            self.screen,
-            pygame.Color("black"),
-            (center_x, center_y - int(line_length)),
-            (center_x, center_y + int(line_length)),
-            line_thickness,
-        )
-
-        # Rotate the '+' lines by 45 degrees to form an 'X'
-        diagonal_offset = int(0.95 * line_length * np.sqrt(2) / 2)  # Diagonal length for 45-degree rotation
-
-        # Diagonal line (top-left to bottom-right)
-        pygame.draw.line(
-            self.screen,
-            pygame.Color("black"),
-            (center_x - diagonal_offset, center_y - diagonal_offset),
-            (center_x + diagonal_offset, center_y + diagonal_offset),
-            tip_radius * 4,
-        )
-        # Diagonal line (bottom-left to top-right)
-        pygame.draw.line(
-            self.screen,
-            pygame.Color("black"),
-            (center_x - diagonal_offset, center_y + diagonal_offset),
-            (center_x + diagonal_offset, center_y - diagonal_offset),
-            tip_radius * 4,
-        )
-
-        # Draw small filled circles at the ends of the diagonal lines
-        tips = [
-            (center_x - diagonal_offset, center_y - diagonal_offset),  # Top-left tip
-            (
-                center_x + diagonal_offset,
-                center_y + diagonal_offset,
-            ),  # Bottom-right tip
-            (center_x - diagonal_offset, center_y + diagonal_offset),  # Bottom-left tip
-            (center_x + diagonal_offset, center_y - diagonal_offset),  # Top-right tip
+        [
+            draw_polygon_with_holes(
+                self.screen, rects_to_polygon(get_rects_from_cluster(cluster)), cell_color, background_color
+            )
+            for cluster in find_clusters(self.board.minefield["state"], COVERED)
         ]
-        for tip in tips:
-            pygame.gfxdraw.aacircle(self.screen, tip[0], tip[1], tip_radius, pygame.Color("black"))
-            pygame.gfxdraw.filled_circle(self.screen, tip[0], tip[1], tip_radius, pygame.Color("black"))
 
     def draw_mines(self):
-        if self.board.game_over:
-            for row, col in self.board.mines:
-                x = BORDER_SIZE + col * (CELL_SIZE + BORDER_SIZE * 2 + LINE_WIDTH) + 1
-                y = BORDER_SIZE + row * (CELL_SIZE + BORDER_SIZE * 2 + LINE_WIDTH) + 1
-                self.draw_mine(x, y, CELL_SIZE)
+        [
+            self.screen.blit(
+                self.scaled_mine_image,
+                (
+                    BORDER_SIZE + col * (CELL_SIZE + BORDER_SIZE * 2 + LINE_WIDTH) + 1,
+                    BORDER_SIZE + row * (CELL_SIZE + BORDER_SIZE * 2 + LINE_WIDTH) + 1,
+                ),
+            )
+            for row, col in self.board.mines
+        ]
 
     def draw_cells_bayes(self):
         # Draw cells with numbers or probabilities
@@ -442,11 +402,16 @@ class GUI:
                         text_rect = text_surface.get_rect(center=(x + CELL_SIZE // 2, y + CELL_SIZE // 2))
                         self.screen.blit(text_surface, text_rect)
 
-                # Draw covered cells with probabilities (if available)
                 if cell["state"] == self.board.states.COVERED.value:
                     if self.probability is not None:
                         probability = self.probability[row, col]
-                        text_surface = self.font.render(f"{probability:.1f}", True, get_custom_rgb(probability))
+                        if probability == 0:
+                            display_text = "S"
+                        elif probability == 1:
+                            display_text = "X"
+                        else:
+                            display_text = f"{probability:.2f}"
+                        text_surface = self.font.render(display_text, True, get_custom_rgb(probability))
                         text_rect = text_surface.get_rect(center=(x + CELL_SIZE // 2, y + CELL_SIZE // 2))
                         self.screen.blit(text_surface, text_rect)
 
