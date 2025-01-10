@@ -1,9 +1,8 @@
 import random
-import itertools
 import string
 import numpy as np
 from solver import Rule, MineCount, solve
-from enum import Enum
+from dataclasses import dataclass
 
 # from scipy.signal import convolve2d
 
@@ -19,8 +18,8 @@ game_mode: Dict[str, Dict[str, int]] = {
 }
 
 
-# State enum for cell states
-class State(Enum):
+@dataclass
+class State:
     UNCOVERED = 0
     COVERED = -1
     FLAGGED = 1
@@ -52,7 +51,7 @@ class Minesweeper:
     def __init__(self, difficulty: str) -> None:
         self.game_over: bool = False
         self.game_won: bool = False
-        self.states: Enum = State
+        self.states = State()
         self.n_rows: int = game_mode[difficulty]["rows"]
         self.n_cols: int = game_mode[difficulty]["columns"]
         self.shape: Tuple[int, int] = (self.n_rows, self.n_cols)
@@ -64,7 +63,7 @@ class Minesweeper:
             ]
         )
         self.minefield: np.ndarray = np.zeros((self.n_rows, self.n_cols), dtype=self.cell_dtype)
-        self.minefield["state"] = self.states.COVERED.value
+        self.minefield["state"] = self.states.COVERED
         self.mines: Set[Tuple[int, int]] = set()
         self.place_mines()
 
@@ -81,21 +80,21 @@ class Minesweeper:
             neighbors["mine_count"][no_mine] += 1
 
     def reveal(self, i: int, j: int) -> None:
-        if self.game_over or self.game_won or self.minefield[i, j]["state"] != State.COVERED.value:
+        if self.game_over or self.game_won or self.minefield[i, j]["state"] != State.COVERED:
             return
 
         if self.minefield[i, j]["mine_count"] == -1:
             self.game_over = True
             self.reveal_all_mines()
-            print("Game Over! You hit a mine.")
+            print("Game Over!")
             return
 
         def flood_fill(row: int, col: int):
             stack = [(row, col)]
             while stack:
                 x, y = stack.pop()
-                if self.minefield[x, y]["state"] == State.COVERED.value:
-                    self.minefield[x, y]["state"] = State.UNCOVERED.value
+                if self.minefield[x, y]["state"] == State.COVERED:
+                    self.minefield[x, y]["state"] = State.UNCOVERED
                     if self.minefield[x, y]["mine_count"] == 0:
                         for nx in range(max(0, x - 1), min(x + 2, self.n_rows)):
                             for ny in range(max(0, y - 1), min(y + 2, self.n_cols)):
@@ -109,7 +108,7 @@ class Minesweeper:
             print("You won!", flush=True)
 
     def random_safe_reveal(self) -> None:
-        covered_mask = (self.minefield["state"] == State.COVERED.value) & (self.minefield["mine_count"] != -1)
+        covered_mask = (self.minefield["state"] == State.COVERED) & (self.minefield["mine_count"] != -1)
         safe_cells = np.argwhere(covered_mask)
 
         if safe_cells.size == 0:
@@ -121,24 +120,23 @@ class Minesweeper:
 
     def reveal_all_mines(self) -> None:
         mine_coords = np.array(list(self.mines))
-        self.minefield[mine_coords[:, 0], mine_coords[:, 1]]["state"] = State.UNCOVERED.value
+        self.minefield[mine_coords[:, 0], mine_coords[:, 1]]["state"] = State.UNCOVERED
         self.game_over = True
         self.game_won = False
 
     def check_win(self) -> bool:
-        covered_cells = np.sum(self.minefield["state"] == State.COVERED.value)
+        covered_cells = np.sum(self.minefield["state"] == State.COVERED)
         return covered_cells == self.n_mines
 
     def get_neighbors(self, i: int, j: int) -> List[Tuple[int, int]]:
         row_range = slice(max(0, i - 1), min(i + 2, self.n_rows))
         col_range = slice(max(0, j - 1), min(j + 2, self.n_cols))
-        neighbors = [
+        return [
             (x, y)
             for x in range(row_range.start, row_range.stop)
             for y in range(col_range.start, col_range.stop)
             if (x, y) != (i, j)
         ]
-        return neighbors
 
     # def get_frontier_cells(self) -> np.ndarray:
     #     """
@@ -150,7 +148,7 @@ class Minesweeper:
     #     # Create a matrix to represent the revealed state of each cell
     #     revealed_matrix: np.ndarray = np.array(
     #         [
-    #             [cell["state"] == State.UNCOVERED.value for cell in row]
+    #             [cell["state"] == State.UNCOVERED for cell in row]
     #             for row in self.minefield
     #         ]
     #     )
@@ -175,13 +173,13 @@ class Minesweeper:
 
         for i in range(self.n_rows):
             for j in range(self.n_cols):
-                if self.minefield[i, j]["state"] == State.UNCOVERED.value:
+                if self.minefield[i, j]["state"] == State.UNCOVERED:
                     neighbors = self.get_neighbors(i, j)
                     mine_count: int = self.minefield[i, j]["mine_count"]
                     covered_neighbors: List[str] = []
 
                     for x, y in neighbors:
-                        if self.minefield[x, y]["state"] == State.COVERED.value or State.FLAGGED.value:
+                        if self.minefield[x, y]["state"] == State.COVERED or State.FLAGGED:
                             if (x, y) not in tags:
                                 tag: str = tag_generator.next_tag()
                                 tags[(x, y)] = tag
@@ -214,16 +212,16 @@ class Minesweeper:
         return self.decode_solution(results)
 
     def get_input(self) -> np.ndarray:
-        display_array: np.ndarray = np.full_like(self.minefield["mine_count"], self.states.COVERED.value)
-        display_array[self.minefield["state"] == self.states.UNCOVERED.value] = self.minefield["mine_count"][
-            self.minefield["state"] == self.states.UNCOVERED.value
+        display_array: np.ndarray = np.full_like(self.minefield["mine_count"], self.states.COVERED)
+        display_array[self.minefield["state"] == self.states.UNCOVERED] = self.minefield["mine_count"][
+            self.minefield["state"] == self.states.UNCOVERED
         ]
         display_array = ((display_array + 1) / 9) * (display_array >= 0)
         return display_array
 
     def get_output(self) -> np.ndarray:
         _, probability = self.solve_minefield()
-        probability[self.minefield["state"] == self.states.UNCOVERED.value] = 0
+        probability[self.minefield["state"] == self.states.UNCOVERED] = 0
         return probability
 
     @staticmethod
@@ -232,11 +230,11 @@ class Minesweeper:
         for i in range(rows):
             for j in range(cols):
                 cell = minefield[i, j]
-                if cell["state"] == State.COVERED.value:
+                if cell["state"] == State.COVERED:
                     print("#", end=" ")
-                elif cell["state"] == State.FLAGGED.value:
+                elif cell["state"] == State.FLAGGED:
                     print("F", end=" ")
-                elif cell["state"] == State.UNCOVERED.value:
+                elif cell["state"] == State.UNCOVERED:
                     if cell["mine_count"] == -1:
                         print("*", end=" ")  # Print an asterisk for mines
                     else:
