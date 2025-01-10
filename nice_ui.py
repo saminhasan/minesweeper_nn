@@ -26,91 +26,70 @@ cell_color: Tuple[int, int, int] = (30, 30, 30)
 line_color: Tuple[int, int, int] = (125, 125, 125)
 background_color: Tuple[int, int, int] = (5, 5, 5)
 text_color: Tuple[int, int, int] = (220, 220, 220)
-font_size: int = 16
+font_size: int = 15
 
 levels = {0: "test", 1: "easy", 2: "intermediate", 3: "hard", 4: "xtreme"}
 
 
 class GUI:
     def __init__(self, level: str):
-        self.level = levels[level]  # Store the level for resetting the game
-        self.init = True
+        self.level: str = levels[level]
+        self.init: bool = True
         self.init_game()
 
     def init_game(self):
         if self.init:
             pg.quit()
 
-        self.help = True
-        """
-        Initialize the Minesweeper GUI.
+        # Init game state
+        self.running: bool = True
+        self.fps: int = 240
+        self.help: bool = True
+        self.flagged: Set[Tuple[int, int]] = set()
 
-        Parameters:
-            level (str): The difficulty level of the Minesweeper game (e.g., 'easy', 'medium', 'hard').
-        """
-        self.board = Minesweeper(self.level)  # Create a Minesweeper board
-        # Solve the minefield and get the solution and probabilities
+        # Initboard
+        self.board = Minesweeper(self.level)
+        rows, cols = self.board.shape
         _, self.probability = self.board.solve_minefield()
 
-        # Calculate board dimensions
-        rows, cols = self.board.shape
-
-        # Get screen dimensions
+        # Dynamically adjust CELL_SIZE based on rows or columns
+        global CELL_SIZE
         user32 = ctypes.windll.user32
         screen_width, screen_height = user32.GetSystemMetrics(0), user32.GetSystemMetrics(1)
 
-        # Dynamically adjust CELL_SIZE to fit the display height
-        global CELL_SIZE
         if rows >= cols:
             CELL_SIZE = (screen_height - 100 - BORDER_SIZE * 2 - (rows - 1) * (LINE_WIDTH + BORDER_SIZE * 2)) // rows
         else:
             CELL_SIZE = (screen_width - 100 - BORDER_SIZE * 2 - (cols - 1) * (LINE_WIDTH + BORDER_SIZE * 2)) // cols
 
-        # Recalculate board dimensions with updated CELL_SIZE
         self.width: int = BORDER_SIZE * 2 + cols * CELL_SIZE + (cols - 1) * (LINE_WIDTH + BORDER_SIZE * 2) + 1
         self.height: int = BORDER_SIZE * 2 + rows * CELL_SIZE + (rows - 1) * (LINE_WIDTH + BORDER_SIZE * 2) + 1
 
-        # Initialize game state
-        self.running: bool = True
-        self.fps: int = 240
-        # Initialize pygame
+        # Set window position to the center of the screen
+        os.environ["SDL_VIDEO_WINDOW_POS"] = f"{(screen_width - self.width) // 2},{(screen_height - self.height - 20) // 2}"
+
+        # Init pg
         pg.init()
         pg.font.init()
-        self.mine_image: pg.Surface = pg.image.load(f"{IMAGE_PATH}/mine.png")
-        # Scale the mine image to fit the cell size
-        self.scaled_mine_image = pg.transform.scale(self.mine_image, (CELL_SIZE, CELL_SIZE))
-        self.flag_image = pg.image.load(f"{IMAGE_PATH}/flag.png")
-        self.scaled_flag_image = pg.transform.scale(self.flag_image, (CELL_SIZE // 2, CELL_SIZE // 2))
-
-        pg.display.set_icon(self.mine_image)  # Set the icon for the window
+        self.clock: pg.time.Clock = pg.time.Clock()
+        self.screen: pg.Surface = pg.display.set_mode((self.width, self.height))
 
         self.font: pg.font.Font = pg.font.Font(f"{FONT_PATH}/orbitron/orbitron.ttf", font_size)
-
-        self.clock: pg.time.Clock = pg.time.Clock()
-
-        # # Calculate the screen's center position for the window
-        os.environ["SDL_VIDEO_WINDOW_POS"] = f"{(screen_width - self.width) // 2},{(screen_height - self.height - 20) // 2}"
-        self.screen: pg.Surface = pg.display.set_mode((self.width, self.height))
+        self.mine_image: pg.Surface = pg.image.load(f"{IMAGE_PATH}/mine.png").convert_alpha()
+        self.flag_image = pg.image.load(f"{IMAGE_PATH}/flag.png").convert_alpha()
+        self.scaled_mine_image = pg.transform.scale(self.mine_image, (CELL_SIZE // 2, CELL_SIZE // 2))
+        self.scaled_flag_image = pg.transform.scale(self.flag_image, (CELL_SIZE // 2, CELL_SIZE // 2))
+        # Configure the game window
         pg.display.set_caption("Minesweeper")
-
-        self.flagged: Set[Tuple[int, int]] = set()
+        pg.display.set_icon(self.mine_image)
 
     def quit(self) -> None:
-        """
-        Stop the game and exit the main loop.
-        """
         self.running = False
 
     def reset_game(self) -> None:
-        """
-        Reset the game by reinitializing the Minesweeper board.
-        """
         self.init_game()
 
     def handle_events(self) -> None:
-        """
-        Handle all pygame events, including quit, key presses, and mouse actions.
-        """
         for event in pg.event.get():
             if event.type == pg.QUIT:
                 self.quit()
@@ -120,12 +99,6 @@ class GUI:
                 self.handle_mouse_event(event)
 
     def handle_key_event(self, key: int) -> None:
-        """
-        Handle key events for the game.
-
-        Parameters:
-            key (int): The key code of the pressed key.
-        """
         if key == pg.K_ESCAPE:
             self.quit()
         elif key == pg.K_r:
@@ -141,15 +114,9 @@ class GUI:
             pass
 
     def handle_mouse_event(self, event: pg.event.Event) -> None:
-        """
-        Handle mouse events for the game.
-
-        Parameters:
-            event (pg.event.Event): The pygame mouse event object.
-        """
         if not (self.board.game_over or self.board.game_won):
             if event.type == pg.MOUSEBUTTONDOWN:
-                mouse_x, mouse_y = event.pos  # Get mouse position
+                mouse_x, mouse_y = event.pos
                 col = (mouse_x - BORDER_SIZE) // (CELL_SIZE + LINE_WIDTH + BORDER_SIZE * 2)
                 row = (mouse_y - BORDER_SIZE) // (CELL_SIZE + LINE_WIDTH + BORDER_SIZE * 2)
                 if 0 <= row < self.board.n_rows and 0 <= col < self.board.n_cols:
@@ -173,51 +140,35 @@ class GUI:
                             self.flagged.discard((row, col))
 
     def draw(self) -> None:
-        """
-        Render the Minesweeper game board on the screen.
-        """
-        # Fill the screen with the background color
         self.screen.fill(background_color)
 
-        # Check for game state
         if self.board.game_over:
-            # Handle game over
             self.draw_mines()
-            # Create a transparent overlay surface
             overlay = pygame.Surface(self.screen.get_size(), pygame.SRCALPHA)
-            overlay.fill((128, 0, 0, 64))  # Semi-transparent red background
+            overlay.fill((128, 0, 0, 64))
             self.screen.blit(overlay, (0, 0))
-            # Display game over message
             main_text = "Game Over, Press 'R' to Restart"
-            self.draw_lines()
         elif self.board.game_won:
-            # Handle game won
             self.draw_clusters()
             self.draw_flags()
-
-            # Create a transparent overlay surface
             overlay = pygame.Surface(self.screen.get_size(), pygame.SRCALPHA)
-            overlay.fill((0, 128, 0, 64))  # Semi-transparent green background
+            overlay.fill((0, 128, 0, 64))
             self.screen.blit(overlay, (0, 0))
-
-            # Display game won message
             main_text = "Game Won, Press 'R' to Restart"
-            self.draw_lines()
         else:
-            # Handle normal game state
             self.draw_clusters()
             self.draw_cells_bayes()
-            self.draw_lines()
             self.draw_markers()
-            blur_bg(self.screen, sigma=0.25)
+            self.draw_lines()
+            blur_bg(self.screen, sigma=0.32)
+            return  # Skip overlay and text rendering in regular gameplay
+        self.draw_lines()
 
-            return  # Skip the rest since no overlay or text is needed
+        # Overlay and main text rendering for game-over or game-won states
         blur_bg(self.screen, sigma=2)
-        # Combine all text rendering into one loop
-        # Define all text content
         text_lines = [
             main_text,
-            f"Current Level: {self.level.capitalize()}",  # Level text
+            f"Current Level: {self.level.capitalize()}",
             "Press 1 - Easy",
             "Press 2 - Intermediate",
             "Press 3 - Hard",
@@ -225,23 +176,17 @@ class GUI:
             "Press H in game to Toggle Help",
         ]
 
-        # Calculate the vertical spacing dynamically
-        total_texts = len(text_lines)
-        start_y = self.height // 4  # Start at 1/4th of the screen height
-        end_y = (3 * self.height) // 4  # End at 3/4th of the screen height
-        vertical_spacing = (end_y - start_y) // (total_texts - 1)  # Evenly space the text
-
-        # Render and position all text
+        # Dynamically position text lines
+        start_y = self.height // 4
+        end_y = (3 * self.height) // 4
+        vertical_spacing = (end_y - start_y) // (len(text_lines) - 1)
         for i, text in enumerate(text_lines):
-            # Render the text
-            text_surface = self.font.render(text, True, (255, 255, 255))  # White text
-            # Calculate the text rectangle (centered horizontally, adjusted vertically)
+            text_surface = self.font.render(text, True, (255, 255, 255))
             text_rect = text_surface.get_rect(center=(self.width // 2, start_y + i * vertical_spacing))
-            # Draw the text
             self.screen.blit(text_surface, text_rect)
 
     def draw_clusters(self):
-        [
+        for cluster in find_clusters(self.board.minefield["state"], COVERED):
             draw_polygon_with_holes(
                 self.screen,
                 rects_to_polygon(get_rects_from_cluster(cluster, CELL_SIZE, BORDER_SIZE, LINE_WIDTH)),
@@ -249,24 +194,26 @@ class GUI:
                 background_color,
                 CELL_SIZE,
             )
-            for cluster in find_clusters(self.board.minefield["state"], COVERED)
-        ]
         blur_bg(self.screen, sigma=0.8)
 
     def draw_mines(self):
-        [
+        for row, col in self.board.mines:
             self.screen.blit(
                 self.scaled_mine_image,
                 (
-                    BORDER_SIZE + col * (CELL_SIZE + BORDER_SIZE * 2 + LINE_WIDTH) + 1,
-                    BORDER_SIZE + row * (CELL_SIZE + BORDER_SIZE * 2 + LINE_WIDTH) + 1,
+                    BORDER_SIZE
+                    + col * (CELL_SIZE + BORDER_SIZE * 2 + LINE_WIDTH)
+                    + 1
+                    + self.scaled_mine_image.get_width() // 2,
+                    BORDER_SIZE
+                    + row * (CELL_SIZE + BORDER_SIZE * 2 + LINE_WIDTH)
+                    + 1
+                    + self.scaled_mine_image.get_height() // 2,
                 ),
             )
-            for row, col in self.board.mines
-        ]
 
     def draw_flags(self):
-        [
+        for row, col in self.board.mines:
             self.screen.blit(
                 self.scaled_flag_image,
                 (
@@ -280,12 +227,10 @@ class GUI:
                     + self.scaled_flag_image.get_height() // 2,
                 ),
             )
-            for row, col in self.board.mines
-        ]
 
     def draw_markers(self):
 
-        [
+        for row, col in self.flagged:
             self.screen.blit(
                 self.scaled_flag_image,
                 (
@@ -299,8 +244,6 @@ class GUI:
                     + self.scaled_flag_image.get_height() // 2,
                 ),
             )
-            for row, col in self.flagged
-        ]
 
     def draw_cells_bayes(self):
         # Draw cells with numbers or probabilities
