@@ -31,6 +31,11 @@ font_size: int = 15
 levels = {0: "test", 1: "easy", 2: "intermediate", 3: "hard", 4: "xtreme"}
 
 
+def predict(board):
+    _, probability = board.solve_minefield()
+    return probability
+
+
 class GUI:
     def __init__(self, level: str):
         self.level: str = levels[level]
@@ -50,7 +55,7 @@ class GUI:
         # Initboard
         self.board = Minesweeper(self.level)
         rows, cols = self.board.shape
-        _, self.probability = self.board.solve_minefield()
+        self.probability = predict(self.board)
 
         # Dynamically adjust CELL_SIZE based on rows or columns
         global CELL_SIZE
@@ -106,7 +111,7 @@ class GUI:
         elif key == pg.K_h:
             self.help = not self.help
             if self.help:
-                _, self.probability = self.board.solve_minefield()
+                self.probability = predict(self.board)
         elif key in [pg.K_0, pg.K_1, pg.K_2, pg.K_3, pg.K_4]:
             self.level = levels[key - pg.K_0]
             self.reset_game()
@@ -124,7 +129,8 @@ class GUI:
                         if not self.board.game_over:
                             if (row, col) not in self.flagged:
                                 self.board.reveal(row, col)
-                                _, self.probability = self.board.solve_minefield()
+                                self.probability = predict(self.board)
+
                                 if not self.board.game_over:
                                     self.flagged = {
                                         flag
