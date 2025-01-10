@@ -4,7 +4,7 @@ import numpy as np
 from solver import Rule, MineCount, solve
 from dataclasses import dataclass
 
-# from scipy.signal import convolve2d
+from scipy.signal import convolve2d
 
 
 from typing import Any, Set, Dict, List, Tuple
@@ -107,6 +107,16 @@ class Minesweeper:
             self.game_won = True
             print("You won!", flush=True)
 
+    def random_reveal(self) -> None:
+        covered_mask = self.minefield["state"] == State.COVERED
+        covered_cells = np.argwhere(covered_mask)
+
+        if covered_cells.size == 0:
+            print("No cells left to reveal.")
+            return
+        i, j = covered_cells[np.random.choice(covered_cells.shape[0])]
+        self.reveal(i, j)
+
     def random_safe_reveal(self) -> None:
         covered_mask = (self.minefield["state"] == State.COVERED) & (self.minefield["mine_count"] != -1)
         safe_cells = np.argwhere(covered_mask)
@@ -114,7 +124,6 @@ class Minesweeper:
         if safe_cells.size == 0:
             print("No safe cells to reveal.")
             return
-
         i, j = safe_cells[np.random.choice(safe_cells.shape[0])]
         self.reveal(i, j)
 
@@ -138,32 +147,25 @@ class Minesweeper:
             if (x, y) != (i, j)
         ]
 
-    # def get_frontier_cells(self) -> np.ndarray:
-    #     """
-    #     Computes the frontier cells that are adjacent to revealed cells.
+    def get_frontier_cells(self) -> np.ndarray:
+        """
+        Computes the frontier cells that are adjacent to revealed cells.
 
-    #     Returns:
-    #         np.ndarray: A binary matrix indicating frontier cells (1 for frontier, 0 otherwise).
-    #     """
-    #     # Create a matrix to represent the revealed state of each cell
-    #     revealed_matrix: np.ndarray = np.array(
-    #         [
-    #             [cell["state"] == State.UNCOVERED for cell in row]
-    #             for row in self.minefield
-    #         ]
-    #     )
+        Returns:
+            np.ndarray: A binary matrix indicating frontier cells (1 for frontier, 0 otherwise).
+        """
+        # Create a matrix to represent the revealed state of each cell
+        revealed_matrix: np.ndarray = np.array([[cell["state"] == State.UNCOVERED for cell in row] for row in self.minefield])
 
-    #     # Define a 3x3 kernel filled with ones
-    #     kernel: np.ndarray = np.ones((3, 3))
+        # Define a 3x3 kernel filled with ones
+        kernel: np.ndarray = np.ones((3, 3))
 
-    #     # Perform 2D convolution to count the number of revealed neighbors for each cell
-    #     convolved: np.ndarray = convolve2d(revealed_matrix, kernel, mode="same")
+        # Perform 2D convolution to count the number of revealed neighbors for each cell
+        convolved: np.ndarray = convolve2d(revealed_matrix, kernel, mode="same")
 
-    #     # Identify cells that are not revealed but are adjacent to at least one revealed cell
-    #     frontier: np.ndarray = np.logical_and(
-    #         convolved > 0, revealed_matrix == 0
-    #     ).astype(int)
-    #     return frontier
+        # Identify cells that are not revealed but are adjacent to at least one revealed cell
+        frontier: np.ndarray = np.logical_and(convolved > 0, revealed_matrix == 0).astype(int)
+        return frontier
 
     def create_rules_from_minefield(self) -> List[Any]:
         rules: List[Any] = []
@@ -260,7 +262,7 @@ def play_game(game_id):
 
     # Play the game until it's won or lost
     while not (board.game_won or board.game_over):
-        board.random_safe_reveal()
+        board.random_reveal()
         a, b = board.solve_minefield()
         counter += 1
 
