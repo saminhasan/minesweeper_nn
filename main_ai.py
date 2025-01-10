@@ -26,7 +26,7 @@ cell_color: Tuple[int, int, int] = (30, 30, 30)
 line_color: Tuple[int, int, int] = (125, 125, 125)
 background_color: Tuple[int, int, int] = (5, 5, 5)
 text_color: Tuple[int, int, int] = (220, 220, 220)
-font_size: int = 15
+font_size: int = 18
 
 levels = {0: "test", 1: "easy", 2: "intermediate", 3: "hard", 4: "xtreme"}
 
@@ -112,6 +112,9 @@ class GUI:
             self.help = not self.help
             if self.help:
                 self.probability = predict(self.board)
+        elif key == pg.K_z:
+            self.board.random_safe_reveal()
+            self.probability = predict(self.board)
         elif key in [pg.K_0, pg.K_1, pg.K_2, pg.K_3, pg.K_4]:
             self.level = levels[key - pg.K_0]
             self.reset_game()
