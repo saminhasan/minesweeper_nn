@@ -54,6 +54,19 @@ class GUI:
 
         # Calculate board dimensions
         rows, cols = self.board.shape
+
+        # Get screen dimensions
+        user32 = ctypes.windll.user32
+        screen_width, screen_height = user32.GetSystemMetrics(0), user32.GetSystemMetrics(1)
+
+        # Dynamically adjust CELL_SIZE to fit the display height
+        global CELL_SIZE
+        if rows >= cols:
+            CELL_SIZE = (screen_height - 100 - BORDER_SIZE * 2 - (rows - 1) * (LINE_WIDTH + BORDER_SIZE * 2)) // rows
+        else:
+            CELL_SIZE = (screen_width - 100 - BORDER_SIZE * 2 - (cols - 1) * (LINE_WIDTH + BORDER_SIZE * 2)) // cols
+
+        # Recalculate board dimensions with updated CELL_SIZE
         self.width: int = BORDER_SIZE * 2 + cols * CELL_SIZE + (cols - 1) * (LINE_WIDTH + BORDER_SIZE * 2) + 1
         self.height: int = BORDER_SIZE * 2 + rows * CELL_SIZE + (rows - 1) * (LINE_WIDTH + BORDER_SIZE * 2) + 1
 
@@ -76,9 +89,7 @@ class GUI:
         self.clock: pg.time.Clock = pg.time.Clock()
 
         # # Calculate the screen's center position for the window
-        user32 = ctypes.windll.user32
-        screen_width, screen_height = user32.GetSystemMetrics(0), user32.GetSystemMetrics(1)
-        os.environ["SDL_VIDEO_WINDOW_POS"] = f"{(screen_width - self.width) // 2},{(screen_height - self.height) // 2}"
+        os.environ["SDL_VIDEO_WINDOW_POS"] = f"{(screen_width - self.width) // 2},{(screen_height - self.height - 20) // 2}"
         self.screen: pg.Surface = pg.display.set_mode((self.width, self.height))
         pg.display.set_caption("Minesweeper")
 
